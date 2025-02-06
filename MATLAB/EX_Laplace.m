@@ -13,10 +13,10 @@ xx= kron(x,ones(1,101));
 yy= kron(ones(1,101),x);
 ind=1:N;
 ind1 = ind(xx<0);
-ind2 = ind(xx>0 & yy>0);
+ind2 = ind(xx>0);% & yy>0);
 ind3 = ind(xx>0 & yy<0);
-indtr= ind(xx==0 | (xx>0 & yy==0));
-spy(A([ind1,ind2,ind3,indtr],[ind1,ind2,ind3,indtr]))
+indtr= ind(xx==0);% | (xx>0 & yy==0));
+%spy(A([ind1,ind2,ind3,indtr],[ind1,ind2,ind3,indtr]))
  
 % A11 = A(ind1,ind1);
 % A22 = A(ind2,ind2);
@@ -28,7 +28,8 @@ spy(A([ind1,ind2,ind3,indtr],[ind1,ind2,ind3,indtr]))
 % At2 = A(indtr,ind2);
 % At3 = A(indtr,ind3);
 
-u = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
+%u = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
+u = ALGO_trAOSM(A,f,{ind1,ind2,indtr},rand(length(indtr),1));
 
 figure(1)
 subplot(1,2,1)
