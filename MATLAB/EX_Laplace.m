@@ -1,6 +1,7 @@
 %=== EX_Laplace ===%
 % example using the Laplacian in 2D
 
+clf
 clear
 
 N = 101^2;
@@ -13,10 +14,16 @@ xx= kron(x,ones(1,101));
 yy= kron(ones(1,101),x);
 ind=1:N;
 ind1 = ind(xx<0);
-ind2 = ind(xx>0);% & yy>0);
-ind3 = ind(xx>0 & yy<0);
-indtr= ind(xx==0);% | (xx>0 & yy==0));
-%spy(A([ind1,ind2,ind3,indtr],[ind1,ind2,ind3,indtr]))
+% ind2 = ind(xx>0 & yy>0);
+% ind3 = ind(xx>0 & yy<0);
+% indtr= ind(xx==0 | (xx>0 & yy==0));
+ind2 = ind(xx>0);
+indtr= ind(xx==0);
+
+% S1 = -A(indtr,[ind2,ind3]) * ( A([ind2,ind3],[ind2,ind3]) \ A([ind2,ind3],indtr) );
+% T2 = -A(indtr,ind2) * ( A(ind2,ind2) \ A(ind2,indtr) );
+% T3 = -A(indtr,ind3) * ( A(ind3,ind3) \ A(ind3,indtr) );
+% surf(log10(abs(S1 - T2 - T3)./abs(S1)))
  
 % A11 = A(ind1,ind1);
 % A22 = A(ind2,ind2);
@@ -28,11 +35,14 @@ indtr= ind(xx==0);% | (xx>0 & yy==0));
 % At2 = A(indtr,ind2);
 % At3 = A(indtr,ind3);
 
-%u = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
-u = ALGO_trAOSM(A,f,{ind1,ind2,indtr},rand(length(indtr),1));
+% [u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},f(indtr));
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,indtr},rand(length(indtr),1));
 
 figure(1)
 subplot(1,2,1)
 surf(reshape(u_exact,101,101))
 subplot(1,2,2)
 surf(reshape(u,101,101))
+
+figure(2)
+semilogy(err,'r.-')
