@@ -65,25 +65,6 @@ surf(reshape(u_exact - u, 101,101))
 figure(2)
 semilogy(err,'r.-')
 pause
-%% 3 strips
-close all
-ind1 = ind(xx<-0.3);
-ind2 = ind(xx>-0.3 & xx<0.3);
-ind3 = ind(xx>0.3);
-indtr= ind(xx==-0.3 | xx==0.3);
-
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
-
-figure(1)
-% subplot(1,2,1)
-% surf(reshape(u_exact,101,101))
-% subplot(1,2,2)
-% surf(reshape(u,101,101))
-surf(reshape(u_exact - u, 101,101))
-
-figure(2)
-semilogy(err,'r.-')
-pause
 %% 4 subdomains
 close all
 
@@ -129,3 +110,43 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+pause
+%% 3 strips
+close all
+ind1 = ind(xx<-0.3);
+ind2 = ind(xx>-0.3 & xx<0.3);
+ind3 = ind(xx>0.3);
+indtr= ind(xx==-0.3 | xx==0.3);
+
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
+
+figure(1)
+% subplot(1,2,1)
+% surf(reshape(u_exact,101,101))
+% subplot(1,2,2)
+% surf(reshape(u,101,101))
+surf(reshape(u_exact - u, 101,101))
+
+figure(2)
+semilogy(err,'r.-')
+pause
+%% 4 strips
+close all
+ind1 = ind(xx<-0.5);
+ind2 = ind(xx>-0.5 & xx<0);
+ind3 = ind(xx>0 & xx<0.5);
+ind4 = ind(xx>0.5);
+indtr= ind(xx==-0.5 | xx==0.5 | xx==0);
+
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1));
+
+figure(1)
+% subplot(1,2,1)
+% surf(reshape(u_exact,101,101))
+% subplot(1,2,2)
+% surf(reshape(u,101,101))
+surf(reshape(u_exact - u, 101,101))
+
+figure(2)
+semilogy(err,'r.-')
+pause
