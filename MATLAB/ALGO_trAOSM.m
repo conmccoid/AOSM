@@ -9,8 +9,6 @@ function [u_master, err_out] = ALGO_trAOSM(A,f,sub_indices, u0)
 
 n = length(sub_indices);        % number of subdomains (+1 for the trace)
 N = length(A);                  % size of global problem
-itermax = 100;                    % maximum number of iterations (nb: make input)
-tol = 1e-15;                     % tolerance for KSP and Schwarz (nb: make input)
 ind_tr = sub_indices{n};        % indices for the trace
 M = length(ind_tr);             % size of trace
 A_tr = A(ind_tr,ind_tr);        % matrix block for trace
@@ -19,6 +17,8 @@ T_master = cell(n,1);           % master list of adapted transmission conditions
 t_master = cell(n,1);           % master list for soln on trace
 S_master = zeros(n*M,M);            % master list of sums of ATCs
 u_master = zeros(N,1);          % master soln of global problem
+itermax = M;                    % maximum number of iterations (nb: make input)
+tol = 1e-16;                    % tolerance for KSP and Schwarz (nb: make input)
 
 for i=1:n-1                     % for each subdomain
     ind_i = sub_indices{i};     % indices for this subdomain
@@ -43,35 +43,32 @@ for i=1:n-1                     % for each subdomain
     W_it(:,1) = d_it/a;         % first w vector on trace
     W_ii(:,1) = d_ii/a;         % first w vector in subdomain
     V_i(:,1) = -A_ti*W_ii(:,1) + T_i*W_it(:,1); % first v vector
-    T_i = T_i - V_i(:,1)*W_it(:,1)'; % update to transmission conditions
 
     iter = 1;                   % init iteration count
     while a>tol && iter<itermax
-        d_i = [A_ii, A_it; A_ti, A_tr + T_i] \ [sparse(N_i,1);a*V_i(:,iter)]; % seems to be often singular
+        d_i = [A_ii, A_it; A_ti, A_tr + T_i - V_i(:,1:iter)*W_it(:,1:iter)'] \ [sparse(N_i,1);a*V_i(:,iter)]; % seems to be often singular
         u_i = u_i + d_i;        % solve and soln update
         %---MGS---%
         W_ii(:,iter+1) = d_i(1:N_i);
         W_it(:,iter+1) = d_i(N_i+1:end);
-%         V_i(:,iter+1) = -A_ti*W_ii(:,iter+1) + T_i*W_it(:,iter+1);
+        V_i(:,iter+1) = -A_ti*W_ii(:,iter+1) + T_i*W_it(:,iter+1);
         for k=1:iter
             h_i = W_it(:,k)'*W_it(:,iter+1);
             W_it(:,iter+1) = W_it(:,iter+1) - h_i*W_it(:,k);
             W_ii(:,iter+1) = W_ii(:,iter+1) - h_i*W_ii(:,k);
-%             V_i(:,iter+1) = V_i(:,iter+1) - h_i*V_i(:,k);
+            V_i(:,iter+1) = V_i(:,iter+1) - h_i*V_i(:,k);
         end
         a = norm(W_it(:,iter+1));
         W_it(:,iter+1) = W_it(:,iter+1)/a;
         W_ii(:,iter+1) = W_ii(:,iter+1)/a;
-%         V_i(:,iter+1) = V_i(:,iter+1)/a;
-        V_i(:,iter+1) = -A_ti*W_ii(:,iter+1) + T_i*W_it(:,iter+1);
-        T_i = T_i - V_i(:,iter+1)*W_it(:,iter+1)';
+        V_i(:,iter+1) = V_i(:,iter+1)/a;
         iter = iter+1;
     end
 %     T_i = -A_ti * (A_ii \ A_it); % using the exact ABCs gives highly convergent method
-    T_master{i} = T_i; % store adapted transmission conditions
+    T_master{i} = T_i - V_i(:,1:iter)*W_it(:,1:iter)'; % store adapted transmission conditions
     t_master{i} = u_i(N_i+1:end);
     for j=setdiff(1:n-1,i)
-        S_master((1:M)+M*(j-1),1:M) = S_master((1:M)+M*(j-1),1:M) + T_i;
+        S_master((1:M)+M*(j-1),1:M) = S_master((1:M)+M*(j-1),1:M) + T_master{i};
     end
     u_master(ind_i) = u_i(1:N_i);
     u_master(ind_tr)= u_master(ind_tr) + t_master{i}/2;
@@ -79,12 +76,12 @@ for i=1:n-1                     % for each subdomain
     figure(1)
     surf(reshape(u_master,sqrt(N),sqrt(N)))
 
-    figure(2)
-    subplot(1,2,1)
-    surf(T_i)
-    subplot(1,2,2)
-    surf(-A_ti*(A_ii \ A_it))
-    pause
+%     figure(2)
+%     subplot(1,2,1)
+%     surf(T_master{i})
+%     subplot(1,2,2)
+%     surf(-A_ti*(A_ii \ A_it))
+    pause(1)
 end
 
 %===Global iterations===%
@@ -125,6 +122,6 @@ while norm(r)>1e-10 && iter<itermax
     figure(1)
     title(['Residual: ',num2str(norm(r))])
     surf(reshape(u_master,sqrt(N),sqrt(N)))
-    pause
+    pause(0.1)
     err_out(iter)=norm(r);
 end
