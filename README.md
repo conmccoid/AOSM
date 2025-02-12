@@ -35,8 +35,8 @@ The repository is organized by code base.
 
 ## Notes
 
-Currently can handle 3 subdomains very well, loves strips.
-4 subdomains breaks, likely due to crosspoint.
-- Idea: crosspoint is a problem because the entire stencil of this point lies in the trace. Why should it be that the trace can't resolve interior points? This is worth investigating.
+Examples with crosspoints fail because the trace has an interior, i.e. the entire stencil of one or more points lies in the trace.
+By giving crosspoints their own subdomain, the method converges.
+However, it appears that the method is then unstable and heavily reliant on the initial guess surrounding the crosspoints.
 
 Diagonal dominance in ATCs must be taken advantage of.
