@@ -14,6 +14,7 @@ Project goals:
     - [ ] convergence
     - [ ] efficiency / flop count
     - [ ] Schur complements
+    - [ ] dependence on initial guess / choice of initial guess
 - [ ] applications
     - [ ] nonlinear (Newton & quasi-Newton)
     - [ ] time dependent (Runge-Kutta & exact time differencing)

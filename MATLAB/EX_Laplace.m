@@ -89,6 +89,8 @@ figure(2)
 semilogy(err,'r.-')
 pause
 %% 4 subdomains, with 5th for crosspoint
+% there is some instability here: with bad initial guesses (criterion
+% unclear) the convergence rate slows significantly
 close all
 
 ind1 = ind(xx<0 & yy<0);
@@ -98,7 +100,9 @@ ind4 = ind(xx<0 & yy>0);
 ind5 = ind(xx==0 & yy==0);
 indtr= ind(xor(xx==0,yy==0));
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,indtr},rand(length(indtr),1));
+u0 = rand(length(indtr),1);
+% u0 = f(indtr); % needs to be modified
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,indtr},u0);
 
 figure(1)
 % subplot(1,2,1)
@@ -112,20 +116,22 @@ semilogy(err,'r.-')
 pause
 %% 9 subdomains, with 10th for crosspoints
 % unstable, apparently heavily dependent on initial guess
+% re-stabilized by putting the crosspoints in larger subdomains
 close all
-ind1 = ind(xx<-0.3 & yy<-0.3);
+ind1 = ind((xx<-0.3 & yy<-0.3) | (xx==-0.3 & yy==-0.3));
 ind2 = ind(xx>-0.3 & xx<0.3 & yy<-0.3);
-ind3 = ind(xx>0.3 & yy<-0.3);
+ind3 = ind((xx>0.3 & yy<-0.3) | (xx==0.3 & yy==-0.3));
 ind4 = ind(xx<-0.3 & yy>-0.3 & yy<0.3);
 ind5 = ind(xx>-0.3 & xx<0.3 & yy>-0.3 & yy<0.3);
 ind6 = ind(xx>0.3 & yy>-0.3 & yy<0.3);
-ind7 = ind(xx<-0.3 & yy>0.3);
+ind7 = ind((xx<-0.3 & yy>0.3) | (xx==-0.3 & yy==0.3));
 ind8 = ind(xx>-0.3 & xx<0.3 & yy>0.3);
-ind9 = ind(xx>0.3 & yy>0.3);
-ind10= ind((xx==0.3 & yy==0.3) | (xx==0.3 & yy==-0.3) | (xx==-0.3 & yy==0.3) | (xx==-0.3 & yy==-0.3));
+ind9 = ind((xx>0.3 & yy>0.3) | (xx==0.3 & yy==0.3));
+% ind10= ind((xx==0.3 & yy==0.3) | (xx==0.3 & yy==-0.3) | (xx==-0.3 & yy==0.3) | (xx==-0.3 & yy==-0.3));
 indtr= ind(xor( xx==-0.3 | xx==0.3,yy==-0.3 | yy==0.3 ));
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,ind10,indtr},rand(length(indtr),1));
+u0 = rand(length(indtr),1);
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},u0);
 
 figure(1)
 % subplot(1,2,1)
