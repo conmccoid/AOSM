@@ -66,13 +66,14 @@ figure(2)
 semilogy(err,'r.-')
 pause
 %% 4 subdomains
+% this doesn't converge with one crosspoint, only when the subdomains slip
 close all
 
-ind1 = ind(xx<0 & yy<0);
-ind2 = ind(xx>0 & yy>0);
-ind3 = ind(xx>0 & yy<0);
-ind4 = ind(xx<0 & yy>0);
-indtr= ind(xx==0 | yy==0);
+ind1 = ind(xx<0 & yy<-0.1);
+ind2 = ind(xx>0 & yy>0.1);
+ind3 = ind(xx>0 & yy<0.1);
+ind4 = ind(xx<0 & yy>-0.1);
+indtr= ind(xx==0 | (xx<0 & yy==-0.1) | (xx>0 & yy==0.1));
 
 [u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1));
 
