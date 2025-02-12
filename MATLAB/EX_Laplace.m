@@ -15,9 +15,10 @@ yy= kron(ones(1,101),x);
 ind=1:N;
 
 %% 2 subdomains
-ind1 = ind(xx<0);
-ind2 = ind(xx>0);
-indtr= ind(xx==0);
+% method can't handle a trace with an interior
+ind1 = ind(xx<-0.1);
+ind2 = ind(xx>0.1);
+indtr= ind(xx>=-0.1 & xx<=0.1);
 
 % S1 = -A(indtr,[ind2,ind3]) * ( A([ind2,ind3],[ind2,ind3]) \ A([ind2,ind3],indtr) );
 % T2 = -A(indtr,ind2) * ( A(ind2,ind2) \ A(ind2,indtr) );
@@ -87,7 +88,30 @@ surf(reshape(u_exact - u, 101,101))
 figure(2)
 semilogy(err,'r.-')
 pause
-%% 9 subdomains
+%% 4 subdomains, with 5th for crosspoint
+close all
+
+ind1 = ind(xx<0 & yy<0);
+ind2 = ind(xx>0 & yy>0);
+ind3 = ind(xx>0 & yy<0);
+ind4 = ind(xx<0 & yy>0);
+ind5 = ind(xx==0 & yy==0);
+indtr= ind(xor(xx==0,yy==0));
+
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,indtr},rand(length(indtr),1));
+
+figure(1)
+% subplot(1,2,1)
+% surf(reshape(u_exact,101,101))
+% subplot(1,2,2)
+% surf(reshape(u,101,101))
+surf(reshape(u_exact - u, 101,101))
+
+figure(2)
+semilogy(err,'r.-')
+pause
+%% 9 subdomains, with 10th for crosspoints
+% unstable, apparently heavily dependent on initial guess
 close all
 ind1 = ind(xx<-0.3 & yy<-0.3);
 ind2 = ind(xx>-0.3 & xx<0.3 & yy<-0.3);
@@ -98,9 +122,10 @@ ind6 = ind(xx>0.3 & yy>-0.3 & yy<0.3);
 ind7 = ind(xx<-0.3 & yy>0.3);
 ind8 = ind(xx>-0.3 & xx<0.3 & yy>0.3);
 ind9 = ind(xx>0.3 & yy>0.3);
-indtr= ind(xx==-0.3 | xx==0.3 | yy==-0.3 | yy==0.3);
+ind10= ind((xx==0.3 & yy==0.3) | (xx==0.3 & yy==-0.3) | (xx==-0.3 & yy==0.3) | (xx==-0.3 & yy==-0.3));
+indtr= ind(xor( xx==-0.3 | xx==0.3,yy==-0.3 | yy==0.3 ));
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},rand(length(indtr),1));
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,ind10,indtr},rand(length(indtr),1));
 
 figure(1)
 % subplot(1,2,1)
