@@ -4,7 +4,7 @@
 close all
 clear all
 
-n=101;
+n=41;
 N = n^2;
 [A,ind] = MAT_Laplace(N);
 f = -ones(N,1); f(ind)=0;
@@ -30,15 +30,15 @@ ind_strips{n_strips+1} = indtr;
 
 figure(1)
 subplot(1,2,1)
-surf(reshape(u_exact,101,101))
+surf(reshape(u_exact,n,n))
 subplot(1,2,2)
-surf(reshape(u,101,101))
+surf(reshape(u,n,n))
 
 figure(2)
 semilogy(err,'r.-')
 pause
 
-for n=[201,401,801,1601]
+for n=[81,161,321,641]
     N=n^2;
     [A,ind] = MAT_Laplace(N);
     f = -ones(N,1); f(ind)=0;
@@ -64,9 +64,9 @@ for n=[201,401,801,1601]
     
     figure(1)
     subplot(1,2,1)
-    surf(reshape(u_exact,101,101))
+    surf(reshape(u_exact,n,n))
     subplot(1,2,2)
-    surf(reshape(u,101,101))
+    surf(reshape(u,n,n))
     
     figure(2)
     semilogy(err,'r.-')
