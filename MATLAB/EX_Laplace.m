@@ -16,9 +16,12 @@ ind=1:N;
 
 %% 2 subdomains
 % method can't handle a trace with an interior
-ind1 = ind(xx<-0.1);
-ind2 = ind(xx>0.1);
-indtr= ind(xx>=-0.1 & xx<=0.1);
+% ind1 = ind(xx<-0.1);
+% ind2 = ind(xx>0.1);
+% indtr= ind(xx>=-0.1 & xx<=0.1);
+ind1 = ind(xx<0);
+ind2 = ind(xx>0);
+indtr= ind(xx==0);
 
 % S1 = -A(indtr,[ind2,ind3]) * ( A([ind2,ind3],[ind2,ind3]) \ A([ind2,ind3],indtr) );
 % T2 = -A(indtr,ind2) * ( A(ind2,ind2) \ A(ind2,indtr) );

@@ -13,6 +13,11 @@ ind_tr = sub_indices{n};        % indices for the trace
 M = length(ind_tr);             % size of trace
 A_tr = A(ind_tr,ind_tr);        % matrix block for trace
 f_tr = f(ind_tr);               % right hand side for trace
+F_tr = zeros(M,n-1);            % mods to rhs for trace
+for i=1:n-1
+    ind_i = sub_indices{i};
+    F_tr(:,i) = A(ind_tr,ind_i) * (A(ind_i,ind_i) \ f(ind_i));
+end
 T_master = cell(n,1);           % master list of adapted transmission conditions
 t_master = cell(n,1);           % master list for soln on trace
 S_master = zeros(n*M,M);            % master list of sums of ATCs
@@ -28,6 +33,7 @@ for i=1:n-1                     % for each subdomain
     A_ti = A(ind_tr,ind_i);     % bottom left block
     f_i = f(ind_i);             % right hand side for this subdomain
     T_i = zeros(M);             % init for adapted transmission conditions
+    f_tr_i = f_tr + F_tr(:,i) - sum(F_tr(:,[1:i-1,i+1:end]),2); % mod to rhs for trace
 
     W_it = zeros(M);            % init W in trace
     W_ii = zeros(N_i,M);        % init W in subdomain
@@ -35,7 +41,7 @@ for i=1:n-1                     % for each subdomain
 
     u_it = u0;                  % init guess
     u_ii = -A_ii \ A_it * u_it; % init soln in subdomain
-    u_i = [A_ii, A_it; A_ti, A_tr + T_i] \ [f_i; f_tr - A_ti*u_ii + T_i*u_it];
+    u_i = [A_ii, A_it; A_ti, A_tr + T_i] \ [f_i; f_tr_i - A_ti*u_ii + T_i*u_it];
     d_ii = u_i(1:N_i) - u_ii;   % init d in subdomain
     d_it = u_i(N_i+1:end) - u_it; % init d in trace
 
