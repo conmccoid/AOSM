@@ -4,6 +4,26 @@
 close all
 clear all
 
+ny=11;
+h=0.1;
+
+list_strips=1:10; list_strips=2.^list_strips;
+for n_strips=list_strips
+    nx=n_strips*(ny-1) + 1;
+    [A,ind] = MAT_Laplace_rectangle(nx,ny,h);
+    f = -ones(nx*ny,1); f(ind)=0;
+    u_exact = A \ f;
+
+    figure(1)
+    surf(reshape(u_exact,ny,nx))
+
+    % ind_strips subroutine
+
+    [u,err] = ALGO_trAOSM(A,f,ind_strips,rand(ny*(n_strips-1),1));
+
+    pause
+end
+
 n=41;
 N = n^2;
 [A,ind] = MAT_Laplace(N);
