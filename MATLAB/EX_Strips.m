@@ -18,8 +18,27 @@ for n_strips=list_strips
     surf(reshape(u_exact,ny,nx))
 
     % ind_strips subroutine
+    ind_strips=cell(n_strips+1,1);
+    ind_strip=1:ny*(ny-2);
+    ind_strips{1}=1:ny*(ny-1);
+    ind_i=ny*(ny-1);
+    indtr=ind_i+(1:ny);
+    ind_i=ind_i+ny;
+    for i=2:n_strips-1
+        ind_strips{i}=ind_i+ind_strip;
+        ind_i=ind_i+ny*(ny-2);
+        indtr=[indtr,ind_i+(1:ny)];
+        ind_i=ind_i+ny;
+    end
+    ind_strips{n_strips}=ind_i+(1:ny*(ny-1));
+    ind_strips{end}=indtr;
 
-    [u,err] = ALGO_trAOSM(A,f,ind_strips,rand(ny*(n_strips-1),1));
+    [u,err] = ALGO_trAOSM(A,f,ind_strips,rand(length(indtr),1),nx,ny);
+
+    figure(2)
+    surf(reshape(u,ny,nx))
+    figure(3)
+    semilogy(err,'r.--')
 
     pause
 end

@@ -1,4 +1,4 @@
-function [u_master, err_out] = ALGO_trAOSM(A,f,sub_indices, u0)
+function [u_master, err_out] = ALGO_trAOSM(A,f,sub_indices, u0, nx, ny)
 % trAOSM runs a multi-subdomain AOSM that shares the trace with all
 % subdomains
 %   - A: system matrix
@@ -77,17 +77,17 @@ for i=1:n-1                     % for each subdomain
         S_master((1:M)+M*(j-1),1:M) = S_master((1:M)+M*(j-1),1:M) + T_master{i};
     end
     u_master(ind_i) = u_i(1:N_i);
-    u_master(ind_tr)= u_master(ind_tr) + t_master{i}/2;
+    u_master(ind_tr)= u_master(ind_tr) + t_master{i}/(n-1);
 
     figure(1)
-    surf(reshape(u_master,sqrt(N),sqrt(N)))
+    surf(reshape(u_master,ny,nx))
 
 %     figure(2)
 %     subplot(1,2,1)
 %     surf(T_master{i})
 %     subplot(1,2,2)
 %     surf(-A_ti*(A_ii \ A_it))
-    pause(1)
+    pause(0.1)
 end
 
 %===Global iterations===%
@@ -127,7 +127,7 @@ while norm(r)>1e-10 && iter<itermax
 
     figure(1)
     title(['Residual: ',num2str(norm(r))])
-    surf(reshape(u_master,sqrt(N),sqrt(N)))
+    surf(reshape(u_master,ny,nx))
     pause(0.1)
     err_out(iter)=norm(r);
 end
