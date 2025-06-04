@@ -92,18 +92,22 @@ for n_strips=list_strips
 
     % ind_strips subroutine - nb: redo for strong scaling
     ind_strips=cell(n_strips+1,1);
-    ind_strip=1:ny*(ny-2);
-    ind_strips{1}=1:ny*(ny-1);
-    ind_i=ny*(ny-1);
+    N_strip=ny*(nx-1-n_strips)/n_strips;
+    ind_strip=1:N_strip;
+    ind_i=ny+N_strip;
+    ind_strips{1}=1:ind_i;
     indtr=ind_i+(1:ny);
     ind_i=ind_i+ny;
     for i=2:n_strips-1
         ind_strips{i}=ind_i+ind_strip;
-        ind_i=ind_i+ny*(ny-2);
+        ind_i=ind_i+N_strip;
         indtr=[indtr,ind_i+(1:ny)];
         ind_i=ind_i+ny;
     end
-    ind_strips{n_strips}=ind_i+(1:ny*(ny-1));
+    ind_end=ind_i+ind_strip;
+    ind_i=ind_i+N_strip;
+    ind_end=[ind_end,ind_i+(1:ny)];
+    ind_strips{n_strips}=ind_end;
     ind_strips{end}=indtr;
 
     [u,err] = ALGO_trAOSM(A,f,ind_strips,rand(length(indtr),1),nx,ny);
