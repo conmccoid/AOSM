@@ -134,7 +134,7 @@ ind9 = ind((xx>0.3 & yy>0.3) | (xx==0.3 & yy==0.3));
 indtr= ind(xor( xx==-0.3 | xx==0.3,yy==-0.3 | yy==0.3 ));
 
 u0 = rand(length(indtr),1);
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},u0);
+[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},u0,101,101);
 
 figure(1)
 % subplot(1,2,1)

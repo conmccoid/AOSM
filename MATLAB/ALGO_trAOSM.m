@@ -40,6 +40,7 @@ for i=1:n-1                     % for each subdomain
     V_i  = W_it;                % init V
 
     u_it = u0;                  % init guess
+%     u_it = f_tr_i;              % init guess: Krylov edition
     u_ii = -A_ii \ A_it * u_it; % init soln in subdomain
     u_i = [A_ii, A_it; A_ti, A_tr + T_i] \ [f_i; f_tr_i - A_ti*u_ii + T_i*u_it];
     d_ii = u_i(1:N_i) - u_ii;   % init d in subdomain
@@ -77,7 +78,7 @@ for i=1:n-1                     % for each subdomain
         S_master((1:M)+M*(j-1),1:M) = S_master((1:M)+M*(j-1),1:M) + T_master{i};
     end
     u_master(ind_i) = u_i(1:N_i);
-    u_master(ind_tr)= u_master(ind_tr) + t_master{i}/(n-1);
+    u_master(ind_tr)= u_master(ind_tr) + t_master{i}/2; % nb: denominator here is incredibly important, but unclear
 
     figure(1)
     surf(reshape(u_master,ny,nx))
@@ -96,7 +97,7 @@ u_new = zeros(N,1);               % storage of new soln
 t_new = cell(n,1);
 iter = 1;                       % init interation count
 err_out(iter)=norm(r);
-while norm(r)>1e-10 && iter<itermax
+while norm(r)>1e-8 && iter<itermax
     for i=1:n-1
         ind_i = sub_indices{i};     % indices for this subdomain
         N_i = length(ind_i);        % size of subdomain
