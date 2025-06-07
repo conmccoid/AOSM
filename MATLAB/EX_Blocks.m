@@ -51,17 +51,17 @@ for n_blocks=list_blocks
     err_master{k}=err;
     k=k+1;
 
-    figure(2)
-    surf(reshape(u,ny,nx))
-    figure(3)
-    semilogy(err,'r.--')
-
-    pause
+%     figure(2)
+%     surf(reshape(u,ny,nx))
+%     figure(3)
+%     semilogy(err,'r.--')
+% 
+%     pause
 end
-%%
+
 figure
-plot(list_blocks,abs(conv_rate),'bo--')
-xlabel('Number of strips')
+plot(list_blocks.^2,abs(conv_rate),'bo--')
+xlabel('Number of blocks')
 ylabel('Convergence rate')
 
 figure
