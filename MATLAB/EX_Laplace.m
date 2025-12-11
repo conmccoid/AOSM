@@ -38,7 +38,7 @@ indtr= ind(xx==0);
 % At2 = A(indtr,ind2);
 % At3 = A(indtr,ind3);
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,indtr},rand(length(indtr),1));
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,indtr},rand(length(indtr),1),101,101);
 
 figure(1)
 subplot(1,2,1)
@@ -48,6 +48,9 @@ surf(reshape(u,101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+semilogy(1:length(r_main{1}),r_main{1},'r.-',1:length(r_main{2}),r_main{2},'bo-')
 pause
 %% 3 subdomains
 close all
@@ -57,7 +60,7 @@ ind2 = ind(xx>0 & yy>0);
 ind3 = ind(xx>0 & yy<0);
 indtr= ind(xx==0 | (xx>0 & yy==0));
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1),101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -68,6 +71,16 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
 %% 4 subdomains
 % this doesn't converge with one crosspoint, only when the subdomains slip
@@ -79,7 +92,7 @@ ind3 = ind(xx>0 & yy<0.1);
 ind4 = ind(xx<0 & yy>-0.1);
 indtr= ind(xx==0 | (xx<0 & yy==-0.1) | (xx>0 & yy==0.1));
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1));
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1),101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -90,6 +103,16 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
 %% 4 subdomains, with 5th for crosspoint
 % there is some instability here: with bad initial guesses (criterion
@@ -105,7 +128,7 @@ indtr= ind(xor(xx==0,yy==0));
 
 u0 = rand(length(indtr),1);
 % u0 = f(indtr); % needs to be modified
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,indtr},u0);
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,indtr},u0,101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -116,6 +139,16 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
 %% 9 subdomains, with 10th for crosspoints
 % unstable, apparently heavily dependent on initial guess
@@ -134,7 +167,7 @@ ind9 = ind((xx>0.3 & yy>0.3) | (xx==0.3 & yy==0.3));
 indtr= ind(xor( xx==-0.3 | xx==0.3,yy==-0.3 | yy==0.3 ));
 
 u0 = rand(length(indtr),1);
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},u0,101,101);
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,indtr},u0,101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -145,6 +178,16 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
 %% 3 strips
 close all
@@ -153,7 +196,7 @@ ind2 = ind(xx>-0.3 & xx<0.3);
 ind3 = ind(xx>0.3);
 indtr= ind(xx==-0.3 | xx==0.3);
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1));
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,indtr},rand(length(indtr),1),101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -164,6 +207,16 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
 %% 4 strips
 close all
@@ -173,7 +226,7 @@ ind3 = ind(xx>0 & xx<0.5);
 ind4 = ind(xx>0.5);
 indtr= ind(xx==-0.5 | xx==0.5 | xx==0);
 
-[u,err] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1));
+[u,err,r_main] = ALGO_trAOSM(A,f,{ind1,ind2,ind3,ind4,indtr},rand(length(indtr),1),101,101);
 
 figure(1)
 % subplot(1,2,1)
@@ -184,4 +237,14 @@ surf(reshape(u_exact - u, 101,101))
 
 figure(2)
 semilogy(err,'r.-')
+
+figure(3)
+r=r_main{1}; r=r(r>0);
+semilogy(1:length(r),r,'--')
+hold on
+for i=2:length(r_main)
+    r=r_main{i}; r=r(r>0);
+    semilogy(1:length(r),r,'--')
+end
+hold off
 pause
