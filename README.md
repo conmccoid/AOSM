@@ -31,8 +31,10 @@ MATLAB prototypes available:
 
 The repository is organized by code base.
 - MATLAB: prototyping new methods.
+- Python: allows testing of parallelization in more contexts, as well as compatibility with FEniCSx and other FEM software.
+- C: allows compatibility with PETSc.
 
-- [ ] Decide on additional code bases, such as FEniCS and PETSc
+- [x] Decide on additional code bases, such as FEniCS and PETSc
 
 ## Notes
 
