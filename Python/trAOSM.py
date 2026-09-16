@@ -36,15 +36,12 @@ class AOSM:
         for i in range(len(self.wTrace[blockIndex])):
             T -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
         return T
+    # this should eventually be replaced with the Schur shuffle or similar
     
-    def solveBlock(self, blockIndex, rhs):
+    def solveBlock(self, blockIndex, T, rhs):
         # lin. solve of a specific block
         # can also be made nonlin?
-        block = self.blocks[blockIndex]
-        topRight = self.topRight[blockIndex]
-        bottomLeft = self.bottomLeft[blockIndex]
-        T = self.formT(blockIndex)
-        matrix = np.block([[block, topRight], [bottomLeft, self.trace + T]])
+        matrix = np.block([[self.blocks[blockIndex], self.topRight[blockIndex]], [self.bottomLeft[blockIndex], self.trace + T]])
         return np.linalg.solve(matrix, rhs)
 
     def MGS(self, Wit, Wii, Vi, dit, dii, Ati):
@@ -66,6 +63,9 @@ class AOSM:
         # not sure if this function will correctly modify Wit, Wii and Vi externally
 
     def adaptTransmission(self, blockIndex):
+        # adapt transmission conditions for a specific block
+
+        # rename variables for brevity
         Aii = self.blocks[blockIndex]
         Ati = self.topRight[blockIndex]
         Ait = self.bottomLeft[blockIndex]
@@ -76,11 +76,13 @@ class AOSM:
         Vi = self.V[blockIndex]
         n = self.sizeBlocks[blockIndex]
 
+        # initial guesses
         uit = ftri
         uii = -np.linalg.solve(Aii, np.linalg.matmul(Ait, uit))
         f = np.concatenate((fi, ftri - np.matmul(Ati, uii) + np.matmul(self.T, uit)))
-        ui = self.solveBlock(blockIndex, f)
+        ui = self.solveBlock(blockIndex, self.formT(blockIndex), f)
 
+        # initial difference vectors
         dii = ui[:n] - uii
         dit = ui[n:] - uit
         a = np.norm(dit)
@@ -88,17 +90,62 @@ class AOSM:
         Wii.append(dii/a)
         Vi.append(-np.matmul(Ati, Wii[0]) + np.matmul(self.T, Wit[0]))
 
+        # main loop for MGS orthogonalization
         while a > 1e-12 and len(Wit) < 1000:
-            di = self.solveBlock(blockIndex, np.concatenate((np.zeros(n), a*Vi[-1])))
+            di = self.solveBlock(blockIndex, self.formT(blockIndex),np.concatenate((np.zeros(n), a*Vi[-1])))
             dii = di[:n]
             dit = di[n:]
             a = self.MGS(Wit, Wii, Vi, dit, dii, Ati)
         # this version currently does not adapt the solution, only the transmission conditions
 
     def constructS(self, blockIndex):
-        S = self.S[blockIndex]
         for i in range(self.nBlocks):
             if i != blockIndex:
-                S += self.formT(i)
+                self.S[blockIndex] += self.formT(i)
+
+    def formResidual(self, uBlocks, uTrace):
+        rtr = self.rhsTrace
+        for i in range(self.nBlocks):
+            rtr -= np.matmul(self.bottomLeft[i], uBlocks[i])
+        rtr -= np.matmul(self.trace, uTrace)
+        return rtr
 
     # ready for global iteration?
+    def solveGlobal(self, uBlocks, uTrace):
+        rtr = self.formResidual(uBlocks, uTrace)
+
+        # initialize storage for new solutions
+        uBlocks_new = uBlocks.copy()
+        uTrace_new = uTrace.copy()
+
+        # main loop
+        while np.linalg.norm(rtr) > 1e-12: # while residual is large
+            for i in range(self.nBlocks): # for every subdomain
+                # build the right hand side
+                rhs = self.rhsTrace
+                for j in range(self.nBlocks):
+                    if j != i:
+                        Ti = self.formT(j)
+                        rhs += np.matmul(Ti, uTrace) - np.matmul(self.bottomLeft[j], uBlocks[j])
+                ui = self.solveBlock(i, self.S[i], rhs) # solve the subdomain
+                uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
+                uTrace_new[i] = ui[self.sizeBlocks[i]:]
+            # update solution and residual
+            uBlocks = uBlocks_new
+            uTrace = np.mean(uTrace_new, axis=0) # average the trace solutions
+            rtr = self.formResidual(uBlocks, uTrace)
+        return uBlocks, uTrace
+
+    def main(self):
+        # initial guess
+        # problem parameters
+
+        self.setup() # setup matrices and vectors
+        
+        # prepare for global iteration
+        for i in range(self.nBlocks):
+            self.adaptTransmission(i) # find adapted transmission conditions
+        for i in range(self.nBlocks):
+            self.constructS(i) # construct S matrices for each block
+
+        uBlocks, uTrace = self.solveGlobal(uBlocks, uTrace) # solve the global problem
