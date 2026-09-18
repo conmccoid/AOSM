@@ -30,7 +30,7 @@ class AOSM:
         self.wBlocks = [[] for _ in range(self.nBlocks)]
         self.wTrace = [[] for _ in range(self.nBlocks)]
         self.V = [[] for _ in range(self.nBlocks)]
-        self.S = [[] for _ in range(self.nBlocks)]
+        self.S = [self.T.copy() for _ in range(self.nBlocks)] # nb: might not work
 
     def formT(self, blockIndex):
         T = self.T
