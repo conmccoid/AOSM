@@ -3,10 +3,14 @@
 
 import numpy as np
 
+# for an eventual sparse version
+from scipy.sparse.linalg import spsolve
+from scipy import sparse
+
 class AOSM:
     def __init__(self, blocks, trace, topRight, bottomLeft, rhsBlocks, rhsTrace):
         self.nBlocks = len(blocks) # number of blocks
-        self.sizeTrace = np.size(trace)[0] # size of trace (might be wrong size)
+        self.sizeTrace = np.shape(trace)[0] # size of trace (might be wrong size)
         self.blocks = blocks # diagonal blocks of the matrix
         self.trace = trace # trace block of the matrix
         self.topRight = topRight # top right blocks of the matrix
@@ -16,20 +20,17 @@ class AOSM:
         self.rhsMods = []
         self.sizeBlocks = []
         for i in range(self.nBlocks):
-            self.sizeBlocks.append(np.size(self.blocks[i])[0]) # size of each block
+            self.sizeBlocks.append(np.shape(self.blocks[i])[0]) # size of each block
             mod1 = np.linalg.solve(self.blocks[i], self.rhsBlocks[i])
-            mod2 = np.linalg.matmul(self.bottomLeft[i], mod1)
+            mod2 = np.dot(self.bottomLeft[i], mod1)
             self.rhsMods.append(mod2) # modifications to rhsTrace
 
     def setup(self):
-        self.T = np.empty(self.sizeTrace,self.sizeTrace)
+        self.T = np.empty((self.sizeTrace, self.sizeTrace))
         self.wBlocks = [[] for _ in range(self.nBlocks)]
         self.wTrace = [[] for _ in range(self.nBlocks)]
         self.V = [[] for _ in range(self.nBlocks)]
         self.S = [[] for _ in range(self.nBlocks)]
-
-    def modRhs(self, blockIndex):
-        return self.rhsTrace + self.rhsMods[blockIndex] - np.sum([self.rhsMods[i] for i in range(self.nBlocks) if i != blockIndex], axis=0)
 
     def formT(self, blockIndex):
         T = self.T
@@ -42,13 +43,13 @@ class AOSM:
         # lin. solve of a specific block
         # can also be made nonlin?
         matrix = np.block([[self.blocks[blockIndex], self.topRight[blockIndex]], [self.bottomLeft[blockIndex], self.trace + T]])
-        return np.linalg.solve(matrix, rhs)
+        return np.linalg.solve(matrix, rhs) # matrix is singular for the Laplace example
 
     def MGS(self, Wit, Wii, Vi, dit, dii, Ati):
-        # Modified Gram-Schmidt orthogonalization
+        # Modified Gram-Schmidt orthogonalization (one step)
         Wii.append(dii)
         Wit.append(dit)
-        Vi.append(-np.linalg.matmul(Ati, dii) + np.linalg.matmul(self.T,dit))
+        Vi.append(-np.dot(Ati, dii) + np.dot(self.T, dit))
         for k in range(len(Wit)-1):
             r = np.dot(Wit[k], Wit[-1])
             Wit[-1] -= r * Wit[k]
@@ -64,13 +65,14 @@ class AOSM:
 
     def adaptTransmission(self, blockIndex):
         # adapt transmission conditions for a specific block
+        # nb: not clear if W and V objects will update properly
 
         # rename variables for brevity
         Aii = self.blocks[blockIndex]
-        Ati = self.topRight[blockIndex]
-        Ait = self.bottomLeft[blockIndex]
+        Ait = self.topRight[blockIndex]
+        Ati = self.bottomLeft[blockIndex]
         fi = self.rhsBlocks[blockIndex]
-        ftri = self.modRhs(blockIndex)
+        ftri = self.rhsTrace + self.rhsMods[blockIndex] - np.sum([self.rhsMods[i] for i in range(self.nBlocks) if i != blockIndex], axis=0) # replaces modRhs, which was only called at this line
         Wit = self.wTrace[blockIndex]
         Wii = self.wBlocks[blockIndex]
         Vi = self.V[blockIndex]
@@ -78,25 +80,29 @@ class AOSM:
 
         # initial guesses
         uit = ftri
-        uii = -np.linalg.solve(Aii, np.linalg.matmul(Ait, uit))
-        f = np.concatenate((fi, ftri - np.matmul(Ati, uii) + np.matmul(self.T, uit)))
+        uii = -np.linalg.solve(Aii, np.dot(Ait, uit))
+        f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(self.T, uit)))
         ui = self.solveBlock(blockIndex, self.formT(blockIndex), f)
 
         # initial difference vectors
         dii = ui[:n] - uii
         dit = ui[n:] - uit
-        a = np.norm(dit)
+        a = np.linalg.norm(dit)
         Wit.append(dit/a)
         Wii.append(dii/a)
-        Vi.append(-np.matmul(Ati, Wii[0]) + np.matmul(self.T, Wit[0]))
+        Vi.append(-np.dot(Ati, Wii[0]) + np.dot(self.T, Wit[0]))
 
         # main loop for MGS orthogonalization
-        while a > 1e-12 and len(Wit) < 1000:
+        while a > 1e-8 and len(Wit) < 1000:
             di = self.solveBlock(blockIndex, self.formT(blockIndex),np.concatenate((np.zeros(n), a*Vi[-1])))
+            ui += di # update solution
             dii = di[:n]
-            dit = di[n:]
-            a = self.MGS(Wit, Wii, Vi, dit, dii, Ati)
-        # this version currently does not adapt the solution, only the transmission conditions
+            dit = di[n:] # difference on trace
+            a = self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
+
+        uBlock = ui[:n]
+        uTrace = ui[n:]
+        return uBlock, uTrace # return updated solution for the subdomain
 
     def constructS(self, blockIndex):
         for i in range(self.nBlocks):
@@ -119,7 +125,7 @@ class AOSM:
         uTrace_new = uTrace.copy()
 
         # main loop
-        while np.linalg.norm(rtr) > 1e-12: # while residual is large
+        while np.linalg.norm(rtr) > 1e-8: # while residual is large
             for i in range(self.nBlocks): # for every subdomain
                 # build the right hand side
                 rhs = self.rhsTrace
@@ -141,11 +147,19 @@ class AOSM:
         # problem parameters
 
         self.setup() # setup matrices and vectors
-        
+
+        uBlocks = []
+        uTrace = []
         # prepare for global iteration
         for i in range(self.nBlocks):
-            self.adaptTransmission(i) # find adapted transmission conditions
+            uBlock, uTrace_i = self.adaptTransmission(i) # find adapted transmission conditions
+            uBlocks.append(uBlock) # store the temporary solution for each block
+            uTrace.append(uTrace_i)
+        uTrace = np.mean(uTrace, axis=0) # average the trace solutions
+
         for i in range(self.nBlocks):
             self.constructS(i) # construct S matrices for each block
 
         uBlocks, uTrace = self.solveGlobal(uBlocks, uTrace) # solve the global problem
+
+        return uBlocks, uTrace # return the solution
