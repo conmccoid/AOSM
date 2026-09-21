@@ -107,7 +107,8 @@ class AOSM:
     def constructS(self, blockIndex):
         for i in range(self.nBlocks):
             if i != blockIndex:
-                self.S[blockIndex] += self.formT(i)
+                self.S[blockIndex] += self.formT(i) # nb: check size of S at the end
+            print(f"Shape of T: {self.T.shape()} Shape of S: {self.S[blockIndex].shape()}")
 
     def formResidual(self, uBlocks, uTrace):
         rtr = self.rhsTrace
@@ -133,7 +134,7 @@ class AOSM:
                     if j != i:
                         Ti = self.formT(j)
                         rhs += np.matmul(Ti, uTrace) - np.matmul(self.bottomLeft[j], uBlocks[j])
-                ui = self.solveBlock(i, self.S[i], rhs) # solve the subdomain
+                ui = self.solveBlock(i, self.S[i], rhs) # solve the subdomain # nb: dimension mismatch?
                 uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
                 uTrace_new[i] = ui[self.sizeBlocks[i]:]
             # update solution and residual
