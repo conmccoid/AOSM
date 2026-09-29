@@ -7,7 +7,7 @@ from trAOSM import AOSM
 from MAT_SymLaplace import SymLaplace
 
 def build_2blocks(n,h):
-    x = np.linspace(-1, 1, 101)[1:-1]   # 99 interior points
+    x = np.linspace(-1, 1, n+2)[1:-1]   # n interior points
     xx = np.tile(x, n)
     yy = np.repeat(x, n)
 
@@ -26,7 +26,7 @@ def build_2blocks(n,h):
     return sub, trace
 
 def build_9blocks(n,h):
-    x = np.linspace(-1, 1, 101)[1:-1]   # 99 interior points
+    x = np.linspace(-1, 1, n+2)[1:-1]   # n interior points
     xx = np.tile(x, n)
     yy = np.repeat(x, n)
 
@@ -63,7 +63,7 @@ def main():
     n = 99
     N = n ** 2
     A, h = SymLaplace(N)
-    f = -np.ones(N)
+    f = -(h**2)*np.ones(N)
 
     # sub, trace = build_9blocks(n, h)
     ind_blocks, ind_trace = build_2blocks(n,h)

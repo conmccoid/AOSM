@@ -6,7 +6,7 @@ def SymLaplace(N):
 
     n = int(np.sqrt(N)) # NN = (n-1)^2
     h = 2/(n+1) # grid spacing
-    d = np.ones(n)/h**2 # diagonal entries
+    d = np.ones(n) # diagonal entries
     d = [d, -2*d, d]
     d = sp.diags(d, [-1, 0, 1], shape=(n, n)).toarray() # 1D Laplacian
 
