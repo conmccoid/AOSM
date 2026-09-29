@@ -76,7 +76,7 @@ def main():
     rhsTrace = f[ind_trace]
 
     solver = AOSM(blocks, trace, topRight, bottomLeft, rhsBlocks, rhsTrace)
-    uBlocks, uTrace = solver.main()
+    uBlocks, uTrace = solver.main(len(ind_trace))
 
     # assemble global solution roughly as in the MATLAB script
     u = np.zeros(N)

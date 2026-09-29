@@ -26,14 +26,14 @@ class AOSM:
             self.rhsMods.append(mod2) # modifications to rhsTrace
 
     def setup(self):
-        self.T = np.empty((self.sizeTrace, self.sizeTrace))
+        self.T = np.zeros((self.sizeTrace, self.sizeTrace))
         self.wBlocks = [[] for _ in range(self.nBlocks)]
         self.wTrace = [[] for _ in range(self.nBlocks)]
         self.V = [[] for _ in range(self.nBlocks)]
-        self.S = [self.T.copy() for _ in range(self.nBlocks)] # nb: might not work
+        self.S = [self.T.copy() for _ in range(self.nBlocks)]
 
     def formT(self, blockIndex):
-        T = self.T
+        T = self.T.copy()
         for i in range(len(self.wTrace[blockIndex])):
             T -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
         return T
@@ -63,9 +63,8 @@ class AOSM:
         return a
         # not sure if this function will correctly modify Wit, Wii and Vi externally
 
-    def adaptTransmission(self, blockIndex):
+    def adaptTransmission(self, blockIndex, maxit):
         # adapt transmission conditions for a specific block
-        # nb: not clear if W and V objects will update properly
 
         # rename variables for brevity
         Aii = self.blocks[blockIndex]
@@ -93,7 +92,7 @@ class AOSM:
         Vi.append(-np.dot(Ati, Wii[0]) + np.dot(self.T, Wit[0]))
 
         # main loop for MGS orthogonalization
-        while a > 1e-8 and len(Wit) < 1000:
+        while a > 1e-8 and len(Wit) < maxit:
             di = self.solveBlock(blockIndex, self.formT(blockIndex),np.concatenate((np.zeros(n), a*Vi[-1])))
             ui += di # update solution
             dii = di[:n]
@@ -102,16 +101,15 @@ class AOSM:
 
         uBlock = ui[:n]
         uTrace = ui[n:]
-        return uBlock, uTrace # return updated solution for the subdomain
+        return uBlock, uTrace, len(Wit), a # return updated solution for the subdomain
 
     def constructS(self, blockIndex):
         for i in range(self.nBlocks):
             if i != blockIndex:
-                self.S[blockIndex] += self.formT(i) # nb: check size of S at the end
-            print(f"Shape of T: {self.T.shape()} Shape of S: {self.S[blockIndex].shape()}")
+                self.S[blockIndex] += self.formT(i)
 
     def formResidual(self, uBlocks, uTrace):
-        rtr = self.rhsTrace
+        rtr = self.rhsTrace.copy()
         for i in range(self.nBlocks):
             rtr -= np.matmul(self.bottomLeft[i], uBlocks[i])
         rtr -= np.matmul(self.trace, uTrace)
@@ -121,29 +119,31 @@ class AOSM:
     def solveGlobal(self, uBlocks, uTrace):
         rtr = self.formResidual(uBlocks, uTrace)
 
-        # initialize storage for new solutions
-        uBlocks_new = uBlocks.copy()
-        uTrace_new = uTrace.copy()
-
         # main loop
+        counter=0
         while np.linalg.norm(rtr) > 1e-8: # while residual is large
+            # initialize storage for new solutions
+            uBlocks_new = [[] for _ in range(self.nBlocks)]
+            uTrace_new = [[] for _ in range(self.nBlocks)]
             for i in range(self.nBlocks): # for every subdomain
                 # build the right hand side
-                rhs = self.rhsTrace
+                rhsTrace = self.rhsTrace.copy()
                 for j in range(self.nBlocks):
                     if j != i:
                         Ti = self.formT(j)
-                        rhs += np.matmul(Ti, uTrace) - np.matmul(self.bottomLeft[j], uBlocks[j])
-                ui = self.solveBlock(i, self.S[i], rhs) # solve the subdomain # nb: dimension mismatch?
+                        rhsTrace += np.matmul(Ti, uTrace) - np.matmul(self.bottomLeft[j], uBlocks[j])
+                ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
                 uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
                 uTrace_new[i] = ui[self.sizeBlocks[i]:]
             # update solution and residual
             uBlocks = uBlocks_new
             uTrace = np.mean(uTrace_new, axis=0) # average the trace solutions
             rtr = self.formResidual(uBlocks, uTrace)
+            counter+=1
+            print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}")
         return uBlocks, uTrace
 
-    def main(self):
+    def main(self,maxit):
         # initial guess
         # problem parameters
 
@@ -151,12 +151,15 @@ class AOSM:
 
         uBlocks = []
         uTrace = []
+        N_it = 0.0
         # prepare for global iteration
         for i in range(self.nBlocks):
-            uBlock, uTrace_i = self.adaptTransmission(i) # find adapted transmission conditions
+            uBlock, uTrace_i, n_it, _ = self.adaptTransmission(i,maxit) # find adapted transmission conditions
             uBlocks.append(uBlock) # store the temporary solution for each block
             uTrace.append(uTrace_i)
+            N_it += n_it
         uTrace = np.mean(uTrace, axis=0) # average the trace solutions
+        print(f"Total number of iterations: {N_it}")
 
         for i in range(self.nBlocks):
             self.constructS(i) # construct S matrices for each block
