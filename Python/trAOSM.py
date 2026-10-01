@@ -26,18 +26,22 @@ class AOSM:
             self.rhsMods.append(mod2) # modifications to rhsTrace
 
     def setup(self):
-        self.T = np.zeros((self.sizeTrace, self.sizeTrace))
+        self.T0 = np.zeros((self.sizeTrace, self.sizeTrace)) # initial T matrix
+        self.T = [self.T0.copy() for _ in range(self.nBlocks)]
+        self.S = [np.zeros((self.sizeTrace, self.sizeTrace)) for _ in range(self.nBlocks)]
         self.wBlocks = [[] for _ in range(self.nBlocks)]
         self.wTrace = [[] for _ in range(self.nBlocks)]
         self.V = [[] for _ in range(self.nBlocks)]
-        self.S = [self.T.copy() for _ in range(self.nBlocks)]
 
     def formT(self, blockIndex):
-        T = self.T.copy()
+        self.T[blockIndex] = self.T0.copy()
         for i in range(len(self.wTrace[blockIndex])):
-            T -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
-        return T
+            self.T[blockIndex] -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
     # this should eventually be replaced with the Schur shuffle or similar
+
+    def updateT(self, blockIndex, w, v):
+        self.T[blockIndex] -= np.outer(v, w)
+        # nb: produces subpar results
     
     def solveBlock(self, blockIndex, T, rhs):
         # lin. solve of a specific block
@@ -49,7 +53,7 @@ class AOSM:
         # Modified Gram-Schmidt orthogonalization (one step)
         Wii.append(dii)
         Wit.append(dit)
-        Vi.append(-np.dot(Ati, dii) + np.dot(self.T, dit))
+        Vi.append(-np.dot(Ati, dii) + np.dot(self.T0, dit))
         for k in range(len(Wit)-1):
             r = np.dot(Wit[k], Wit[-1])
             Wit[-1] -= r * Wit[k]
@@ -69,6 +73,7 @@ class AOSM:
         Aii = self.blocks[blockIndex]
         Ait = self.topRight[blockIndex]
         Ati = self.bottomLeft[blockIndex]
+        Ti  = self.T[blockIndex]
         fi = self.rhsBlocks[blockIndex]
         ftri = self.rhsTrace + self.rhsMods[blockIndex] - np.sum([self.rhsMods[i] for i in range(self.nBlocks) if i != blockIndex], axis=0) # replaces modRhs, which was only called at this line
         Wit = self.wTrace[blockIndex]
@@ -79,8 +84,8 @@ class AOSM:
         # initial guesses
         uit = ftri
         uii = -np.linalg.solve(Aii, np.dot(Ait, uit))
-        f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(self.T, uit)))
-        ui = self.solveBlock(blockIndex, self.formT(blockIndex), f)
+        f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(Ti, uit)))
+        ui = self.solveBlock(blockIndex, Ti, f)
 
         # initial difference vectors
         dii = ui[:n] - uii
@@ -88,15 +93,16 @@ class AOSM:
         a = np.linalg.norm(dit)
         Wit.append(dit/a)
         Wii.append(dii/a)
-        Vi.append(-np.dot(Ati, Wii[0]) + np.dot(self.T, Wit[0]))
+        Vi.append(-np.dot(Ati, Wii[0]) + np.dot(Ti, Wit[0]))
 
         # main loop for MGS orthogonalization
         while a > tol and len(Wit) < maxit:
-            di = self.solveBlock(blockIndex, self.formT(blockIndex),np.concatenate((np.zeros(n), a*Vi[-1])))
+            di = self.solveBlock(blockIndex, Ti, np.concatenate((np.zeros(n), a*Vi[-1]))) # nb: need to replace formT for accurate and fast computation
             ui += di # update solution
             dii = di[:n]
             dit = di[n:] # difference on trace
             a = self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
+            self.formT(blockIndex) # update T matrix for this block
 
         uBlock = ui[:n]
         uTrace = ui[n:]
@@ -105,7 +111,7 @@ class AOSM:
     def constructS(self, blockIndex):
         for i in range(self.nBlocks):
             if i != blockIndex:
-                self.S[blockIndex] += self.formT(i)
+                self.S[blockIndex] += self.T[i]
 
     def formResidual(self, uBlocks, uTrace):
         rtr = self.rhsTrace.copy()
@@ -130,7 +136,7 @@ class AOSM:
                 rhsTrace = self.rhsTrace.copy()
                 for j in range(self.nBlocks):
                     if j != i:
-                        Ti = self.formT(j)
+                        Ti = self.T[j]
                         rhsTrace += np.matmul(Ti, uTraces[j]) - np.matmul(self.bottomLeft[j], uBlocks[j])
                 ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
                 uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
