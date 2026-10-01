@@ -7,6 +7,10 @@ import numpy as np
 from scipy.sparse.linalg import spsolve
 from scipy import sparse
 
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank, size = comm.Get_rank(), comm.Get_size()
+
 class AOSM:
     def __init__(self, blocks, trace, topRight, bottomLeft, rhsBlocks, rhsTrace):
         self.nBlocks = len(blocks) # number of blocks

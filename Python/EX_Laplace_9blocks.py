@@ -69,7 +69,7 @@ def main():
     tol = 1e-8
     maxit = n
 
-    # sub, trace = build_9blocks(n, h)
+    # ind_blocks, ind_trace = build_9blocks(n,h)
     ind_blocks, ind_trace = build_2blocks(n,h)
 
     blocks = [A[np.ix_(idx, idx)] for idx in ind_blocks]
