@@ -43,7 +43,7 @@ class AOSM:
         # lin. solve of a specific block
         # can also be made nonlin?
         matrix = np.block([[self.blocks[blockIndex], self.topRight[blockIndex]], [self.bottomLeft[blockIndex], self.trace + T]])
-        return np.linalg.solve(matrix, rhs) # matrix is singular for the Laplace example
+        return np.linalg.solve(matrix, rhs)
 
     def MGS(self, Wit, Wii, Vi, dit, dii, Ati):
         # Modified Gram-Schmidt orthogonalization (one step)
@@ -56,14 +56,13 @@ class AOSM:
             Wii[-1] -= r * Wii[k]
             Vi[-1] -= r * Vi[k]
         a = np.linalg.norm(Wit[-1])
-        if a > 1e-12:
-            Wit[-1] /= a
-            Wii[-1] /= a
-            Vi[-1] /= a
+        Wit[-1] /= a
+        Wii[-1] /= a
+        Vi[-1] /= a
         return a
         # not sure if this function will correctly modify Wit, Wii and Vi externally
 
-    def adaptTransmission(self, blockIndex, maxit):
+    def adaptTransmission(self, blockIndex, tol, maxit):
         # adapt transmission conditions for a specific block
 
         # rename variables for brevity
@@ -92,7 +91,7 @@ class AOSM:
         Vi.append(-np.dot(Ati, Wii[0]) + np.dot(self.T, Wit[0]))
 
         # main loop for MGS orthogonalization
-        while a > 1e-8 and len(Wit) < maxit:
+        while a > tol and len(Wit) < maxit:
             di = self.solveBlock(blockIndex, self.formT(blockIndex),np.concatenate((np.zeros(n), a*Vi[-1])))
             ui += di # update solution
             dii = di[:n]
@@ -116,7 +115,8 @@ class AOSM:
         return rtr
 
     # ready for global iteration?
-    def solveGlobal(self, uBlocks, uTrace):
+    def solveGlobal(self, uBlocks, uTraces):
+        uTrace = np.mean(uTraces, axis=0) # average the trace solutions
         rtr = self.formResidual(uBlocks, uTrace)
 
         # main loop
@@ -131,19 +131,20 @@ class AOSM:
                 for j in range(self.nBlocks):
                     if j != i:
                         Ti = self.formT(j)
-                        rhsTrace += np.matmul(Ti, uTrace) - np.matmul(self.bottomLeft[j], uBlocks[j])
+                        rhsTrace += np.matmul(Ti, uTraces[j]) - np.matmul(self.bottomLeft[j], uBlocks[j])
                 ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
                 uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
                 uTrace_new[i] = ui[self.sizeBlocks[i]:]
             # update solution and residual
             uBlocks = uBlocks_new
+            uTraces = uTrace_new
             uTrace = np.mean(uTrace_new, axis=0) # average the trace solutions
             rtr = self.formResidual(uBlocks, uTrace)
             counter+=1
             print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}")
         return uBlocks, uTrace
 
-    def main(self,maxit):
+    def main(self,tol,maxit):
         # initial guess
         # problem parameters
 
@@ -154,12 +155,11 @@ class AOSM:
         N_it = 0.0
         # prepare for global iteration
         for i in range(self.nBlocks):
-            uBlock, uTrace_i, n_it, _ = self.adaptTransmission(i,maxit) # find adapted transmission conditions
+            uBlock, uTrace_i, n_it, _ = self.adaptTransmission(i, tol, maxit) # find adapted transmission conditions
             uBlocks.append(uBlock) # store the temporary solution for each block
             uTrace.append(uTrace_i)
             N_it += n_it
-        uTrace = np.mean(uTrace, axis=0) # average the trace solutions
-        print(f"Total number of iterations: {N_it}")
+        print(f"Total number of iterations to adapt: {N_it}")
 
         for i in range(self.nBlocks):
             self.constructS(i) # construct S matrices for each block
