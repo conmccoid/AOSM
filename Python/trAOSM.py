@@ -38,13 +38,14 @@ class AOSM:
         self.V = [[] for _ in range(self.nBlocks)]
 
     def formT(self, blockIndex):
-        self.T[blockIndex] = self.T0.copy()
+        T = self.T0.copy()
         for i in range(len(self.wTrace[blockIndex])):
-            self.T[blockIndex] -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
+            T -= np.outer(self.V[blockIndex][i], self.wTrace[blockIndex][i])
+        return T
     # this should eventually be replaced with the Schur shuffle or similar
 
-    def updateT(self, blockIndex, w, v):
-        self.T[blockIndex] -= np.outer(v, w)
+    def updateT(self, blockIndex):
+        self.T[blockIndex] = self.formT(blockIndex)
         # nb: produces subpar results
     
     def solveBlock(self, blockIndex, T, rhs):
@@ -88,8 +89,8 @@ class AOSM:
         # initial guesses
         uit = ftri
         uii = -np.linalg.solve(Aii, np.dot(Ait, uit))
-        f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(Ti, uit)))
-        ui = self.solveBlock(blockIndex, Ti, f)
+        f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(self.T0, uit)))
+        ui = self.solveBlock(blockIndex, self.formT(blockIndex), f)
 
         # initial difference vectors
         dii = ui[:n] - uii
@@ -97,16 +98,15 @@ class AOSM:
         a = np.linalg.norm(dit)
         Wit.append(dit/a)
         Wii.append(dii/a)
-        Vi.append(-np.dot(Ati, Wii[0]) + np.dot(Ti, Wit[0]))
+        Vi.append(-np.dot(Ati, Wii[0]) + np.dot(self.T0, Wit[0]))
 
         # main loop for MGS orthogonalization
         while a > tol and len(Wit) < maxit:
-            di = self.solveBlock(blockIndex, Ti, np.concatenate((np.zeros(n), a*Vi[-1]))) # nb: need to replace formT for accurate and fast computation
+            di = self.solveBlock(blockIndex, self.formT(blockIndex), np.concatenate((np.zeros(n), a*Vi[-1]))) # nb: need to replace formT for accurate and fast computation
             ui += di # update solution
             dii = di[:n]
             dit = di[n:] # difference on trace
             a = self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
-            self.formT(blockIndex) # update T matrix for this block
 
         uBlock = ui[:n]
         uTrace = ui[n:]
@@ -140,8 +140,7 @@ class AOSM:
                 rhsTrace = self.rhsTrace.copy()
                 for j in range(self.nBlocks):
                     if j != i:
-                        Ti = self.T[j]
-                        rhsTrace += np.matmul(Ti, uTraces[j]) - np.matmul(self.bottomLeft[j], uBlocks[j])
+                        rhsTrace += np.matmul(self.T[j], uTraces[j]) - np.matmul(self.bottomLeft[j], uBlocks[j])
                 ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
                 uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
                 uTrace_new[i] = ui[self.sizeBlocks[i]:]
@@ -170,6 +169,7 @@ class AOSM:
             uTrace.append(uTrace_i)
             N_it += n_it
         print(f"Total number of iterations to adapt: {N_it}")
+            self.updateT(i) # update the T matrix for each block
 
         for i in range(self.nBlocks):
             self.constructS(i) # construct S matrices for each block
