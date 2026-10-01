@@ -67,7 +67,6 @@ def main():
 
     # numerical parameters
     tol = 1e-8
-    maxit = n
 
     # ind_blocks, ind_trace = build_9blocks(n,h)
     ind_blocks, ind_trace = build_2blocks(n,h)
@@ -80,7 +79,7 @@ def main():
     rhsTrace = f[ind_trace]
 
     solver = AOSM(blocks, trace, topRight, bottomLeft, rhsBlocks, rhsTrace)
-    uBlocks, uTrace = solver.main(tol, maxit)
+    uBlocks, uTrace = solver.main(tol, len(ind_trace))
 
     # assemble global solution roughly as in the MATLAB script
     u = np.zeros(N)

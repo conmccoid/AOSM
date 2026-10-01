@@ -159,21 +159,24 @@ class AOSM:
 
         self.setup() # setup matrices and vectors
 
-        uBlocks = []
-        uTrace = []
-        N_it = 0.0
+        # owned = list(range(rank, self.nBlocks, size)) # blocks owned by this process
+
+        uBlocks = [[] for _ in range(self.nBlocks)] # initialize storage for block solutions
+        uTraces = [[] for _ in range(self.nBlocks)] # initialize storage for trace solutions
+        N_it = [0.0 for _ in range(size)]
         # prepare for global iteration
         for i in range(self.nBlocks):
-            uBlock, uTrace_i, n_it, _ = self.adaptTransmission(i, tol, maxit) # find adapted transmission conditions
-            uBlocks.append(uBlock) # store the temporary solution for each block
-            uTrace.append(uTrace_i)
-            N_it += n_it
-        print(f"Total number of iterations to adapt: {N_it}")
+            uBlock, uTrace, n_it, _ = self.adaptTransmission(i, tol, maxit) # find adapted transmission conditions
+            uBlocks[i] = uBlock # store the temporary solution for each block
+            uTraces[i] = uTrace
+            N_it[rank] += n_it
             self.updateT(i) # update the T matrix for each block
+        print(f"Total number of iterations to adapt on rank {rank}: {N_it[rank]}")
+        comm.Barrier() # synchronize processes
 
         for i in range(self.nBlocks):
             self.constructS(i) # construct S matrices for each block
 
-        uBlocks, uTrace = self.solveGlobal(uBlocks, uTrace) # solve the global problem
+        uBlocks, uTrace = self.solveGlobal(uBlocks, uTraces) # solve the global problem
 
         return uBlocks, uTrace # return the solution
