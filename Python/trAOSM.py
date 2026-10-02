@@ -31,11 +31,12 @@ class AOSM:
 
     def setup(self):
         self.T0 = np.zeros((self.sizeTrace, self.sizeTrace)) # initial T matrix
-        self.T = [self.T0.copy() for _ in range(self.nBlocks)]
+        self.T = np.tile(self.T0, (self.nBlocks, 1, 1))
         self.S = [np.zeros((self.sizeTrace, self.sizeTrace)) for _ in range(self.nBlocks)]
         self.wBlocks = [[] for _ in range(self.nBlocks)]
         self.wTrace = [[] for _ in range(self.nBlocks)]
         self.V = [[] for _ in range(self.nBlocks)]
+        self.owned = list(range(rank, self.nBlocks, size)) # blocks owned by this process
 
     def formT(self, blockIndex):
         T = self.T0.copy()
@@ -116,42 +117,19 @@ class AOSM:
         for i in range(self.nBlocks):
             if i != blockIndex:
                 self.S[blockIndex] += self.T[i]
+    # nb: no longer necessary?
 
-    def formResidual(self, uBlocks, uTrace):
+    def formResidual(self, uBlocks, uTraces):
         rtr = self.rhsTrace.copy()
-        for i in range(self.nBlocks):
-            rtr -= np.matmul(self.bottomLeft[i], uBlocks[i])
-        rtr -= np.matmul(self.trace, uTrace)
+        rtrTotal = np.zeros(self.sizeTrace)
+        rtrTrace = np.zeros(self.sizeTrace)
+        for i in self.owned:
+            rtrTotal -= np.matmul(self.bottomLeft[i], uBlocks[i])
+            rtrTrace -= np.matmul(self.trace, uTraces[i])
+        comm.Allreduce(MPI.IN_PLACE, rtrTotal, op=MPI.SUM)
+        comm.Allreduce(MPI.IN_PLACE, rtrTrace, op=MPI.SUM)
+        rtr += rtrTotal + rtrTrace/self.nBlocks
         return rtr
-
-    # ready for global iteration?
-    def solveGlobal(self, uBlocks, uTraces):
-        uTrace = np.mean(uTraces, axis=0) # average the trace solutions
-        rtr = self.formResidual(uBlocks, uTrace)
-
-        # main loop
-        counter=0
-        while np.linalg.norm(rtr) > 1e-8: # while residual is large
-            # initialize storage for new solutions
-            uBlocks_new = [[] for _ in range(self.nBlocks)]
-            uTrace_new = [[] for _ in range(self.nBlocks)]
-            for i in range(self.nBlocks): # for every subdomain
-                # build the right hand side
-                rhsTrace = self.rhsTrace.copy()
-                for j in range(self.nBlocks):
-                    if j != i:
-                        rhsTrace += np.matmul(self.T[j], uTraces[j]) - np.matmul(self.bottomLeft[j], uBlocks[j])
-                ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
-                uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
-                uTrace_new[i] = ui[self.sizeBlocks[i]:]
-            # update solution and residual
-            uBlocks = uBlocks_new
-            uTraces = uTrace_new
-            uTrace = np.mean(uTrace_new, axis=0) # average the trace solutions
-            rtr = self.formResidual(uBlocks, uTrace)
-            counter+=1
-            print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}")
-        return uBlocks, uTrace
 
     def main(self,tol,maxit):
         # initial guess
@@ -159,13 +137,11 @@ class AOSM:
 
         self.setup() # setup matrices and vectors
 
-        # owned = list(range(rank, self.nBlocks, size)) # blocks owned by this process
-
         uBlocks = [[] for _ in range(self.nBlocks)] # initialize storage for block solutions
         uTraces = [[] for _ in range(self.nBlocks)] # initialize storage for trace solutions
         N_it = [0.0 for _ in range(size)]
         # prepare for global iteration
-        for i in range(self.nBlocks):
+        for i in self.owned: # for each block owned by this process
             uBlock, uTrace, n_it, _ = self.adaptTransmission(i, tol, maxit) # find adapted transmission conditions
             uBlocks[i] = uBlock # store the temporary solution for each block
             uTraces[i] = uTrace
@@ -174,9 +150,47 @@ class AOSM:
         print(f"Total number of iterations to adapt on rank {rank}: {N_it[rank]}")
         comm.Barrier() # synchronize processes
 
-        for i in range(self.nBlocks):
-            self.constructS(i) # construct S matrices for each block
+        T = np.zeros((self.sizeTrace, self.sizeTrace)) # initialize T matrix for summation
+        for i in self.owned:
+            T += self.T[i] # sum T matrices for each block
+        comm.Allreduce(MPI.IN_PLACE, T, op=MPI.SUM) # gather T matrices from all processes
+        for i in self.owned:
+            self.S[i] = T - self.T[i] # update S matrices for each block
 
-        uBlocks, uTrace = self.solveGlobal(uBlocks, uTraces) # solve the global problem
+        rtr = self.formResidual(uBlocks, uTraces)
 
-        return uBlocks, uTrace # return the solution
+        # main loop
+        counter=0
+        while np.linalg.norm(rtr) > 1e-8: # while residual is large
+            # initialize storage for new solutions
+            uBlocks_new = [[] for _ in range(self.nBlocks)]
+            uTrace_new = [[] for _ in range(self.nBlocks)]
+            rhsTraceTotal = np.zeros(self.sizeTrace)
+            for i in self.owned:
+                rhsTraceTotal += np.matmul(self.T[i], uTraces[i]) - np.matmul(self.bottomLeft[i], uBlocks[i])
+            comm.Allreduce(MPI.IN_PLACE, rhsTraceTotal, op=MPI.SUM)
+            rhsTraceTotal += self.rhsTrace
+            for i in self.owned: # for every subdomain
+                # build the right hand side
+                rhsTrace = rhsTraceTotal - (np.matmul(self.T[i], uTraces[i]) - np.matmul(self.bottomLeft[i], uBlocks[i]))
+                ui = self.solveBlock(i, self.S[i], np.concatenate((self.rhsBlocks[i],rhsTrace))) # solve the subdomain
+                uBlocks_new[i] = ui[:self.sizeBlocks[i]] # store new solutions
+                uTrace_new[i] = ui[self.sizeBlocks[i]:]
+            # update solution and residual
+            uBlocks = uBlocks_new
+            uTraces = uTrace_new
+            rtr = self.formResidual(uBlocks, uTraces)
+            counter+=1
+            print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}")
+
+        # generate the final trace solution by averaging across processes
+        uTrace = np.zeros(self.sizeTrace)
+        for i in self.owned:
+            uTrace += uTraces[i] / self.nBlocks # average the trace solutions across processes
+        comm.Allreduce(MPI.IN_PLACE, uTrace, op=MPI.SUM) # gather the averaged trace solution across processes
+        gathered = comm.gather(uBlocks, root=0)
+        uBlocks = [
+            next(rank_blocks[i] for rank_blocks in gathered if len(rank_blocks[i]))
+            for i in range(self.nBlocks)
+        ]
+        return uBlocks, uTrace
