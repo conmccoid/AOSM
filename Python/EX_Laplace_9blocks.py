@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from trAOSM import AOSM
 from MAT_SymLaplace import SymLaplace
+from DOM_Laplace import Laplace
 
 def build_2blocks(n,h):
     x = np.linspace(-1, 1, n+2)[1:-1]   # n interior points
@@ -62,40 +63,21 @@ def build_9blocks(n,h):
 def main():
     n = 99
     N = n ** 2
-    A, h = SymLaplace(N)
-    f = -(h**2)*np.ones(N)
 
     # numerical parameters
     tol = 1e-8
 
-    # ind_blocks, ind_trace = build_9blocks(n,h)
-    ind_blocks, ind_trace = build_2blocks(n,h)
+    # domain
+    block, trace, topRight, bottomLeft, rhsBlock, rhsTrace, uBlock, uTrace = Laplace(N)
 
-    blocks = [A[np.ix_(idx, idx)] for idx in ind_blocks]
-    trace = A[np.ix_(ind_trace, ind_trace)]
-    topRight = [A[np.ix_(idx, ind_trace)] for idx in ind_blocks]
-    bottomLeft = [A[np.ix_(ind_trace, idx)] for idx in ind_blocks]
-    rhsBlocks = [f[idx] for idx in ind_blocks]
-    rhsTrace = f[ind_trace]
-
-    solver = AOSM(blocks, trace, topRight, bottomLeft, rhsBlocks, rhsTrace)
-    uBlocks, uTrace = solver.main(tol, len(ind_trace))
-
-    # assemble global solution roughly as in the MATLAB script
-    u = np.zeros(N)
-    for idx, ub in zip(ind_blocks, uBlocks):
-        u[idx] = ub
-    u[ind_trace] = uTrace
+    solver = AOSM(block, trace, topRight, bottomLeft, rhsBlock, rhsTrace) # needs rewrite
+    vBlock, vTrace = solver.main(tol, len(rhsTrace))
 
     # compare against the exact sparse solve
-    u_exact = np.linalg.solve(A, f)
-    err = np.linalg.norm(u - u_exact)
+    err = np.linalg.norm(vBlock - uBlock) # need to gather here, and somehow add trace error
 
-    print(f"Grid size: {n}x{n}")
-    print(f"Trace size: {len(ind_trace)}")
-    print(f"Global error norm: {err:.3e}")
-
-        # Visualize
+    # Visualize
+    # needs rewrite to plot in parallel
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     grid = int(np.sqrt(N))
 
@@ -109,7 +91,6 @@ def main():
 
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     main()
