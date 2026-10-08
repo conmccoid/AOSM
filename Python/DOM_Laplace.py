@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from mpi4py import MPI
+import matplotlib.pyplot as plt
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -55,3 +56,32 @@ def Laplace(N):
     trace, rhsTrace, uTrace = comm.bcast(trace_data, root=0)
 
     return block, trace, topRight, bottomLeft, rhsBlock, rhsTrace, uBlock, uTrace
+
+def calcError(uBlock, uTrace, vBlock, vTrace, N, display=True):
+    n = int(np.sqrt(N))
+    h = 2 / (n + 1)
+    x = np.linspace(-1, 1, n + 2)[1:-1]
+    xx = np.tile(x, n)
+    if nrank==2:
+        trace_mask = (xx > -h / 2) & (xx < h / 2)
+        if rank==0:
+            block_mask = (xx < -h/2)
+        elif rank==1:
+            block_mask = (xx > h/2)
+    block_data = comm.gather((np.flatnonzero(block_mask), abs(uBlock - vBlock)), root=0)
+    err = None
+    if rank==0:
+        err = np.zeros(N)
+        for indices, values in block_data:
+            err[indices] = values
+        err[trace_mask] = abs(uTrace - vTrace)
+        if display:
+            print(f"2-norm of error: {np.linalg.norm(err)}")
+            fig, ax = plt.subplots()
+            im = ax.imshow(err.reshape(n, n), cmap='coolwarm')
+            ax.set_title('Error')
+            fig.colorbar(im, ax=ax)
+            plt.tight_layout()
+            plt.show()
+    err = comm.bcast(err, root=0)
+    return err

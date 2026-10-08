@@ -5,26 +5,7 @@ import matplotlib.pyplot as plt
 
 from trAOSM import AOSM
 from MAT_SymLaplace import SymLaplace
-from DOM_Laplace import Laplace
-
-def build_2blocks(n,h):
-    x = np.linspace(-1, 1, n+2)[1:-1]   # n interior points
-    xx = np.tile(x, n)
-    yy = np.repeat(x, n)
-
-    ind = np.arange(n * n)
-
-    cond1 = (xx < -h/2)
-    cond2 = (xx > h/2)
-    cond_trace = (xx>-h/2) & (xx<h/2)
-
-    sub = [
-        ind[cond1],
-        ind[cond2]
-    ]
-    trace = ind[cond_trace]
-
-    return sub, trace
+from DOM_Laplace import Laplace, calcError
 
 def build_9blocks(n,h):
     x = np.linspace(-1, 1, n+2)[1:-1]   # n interior points
@@ -74,23 +55,7 @@ def main():
     vBlock, vTrace = solver.main(tol, len(rhsTrace))
 
     # compare against the exact sparse solve
-    err = np.linalg.norm(vBlock - uBlock) # need to gather here, and somehow add trace error
-
-    # Visualize
-    # needs rewrite to plot in parallel
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    grid = int(np.sqrt(N))
-
-    im1 = axes[0].imshow(u_exact.reshape(grid, grid), cmap="viridis")
-    axes[0].set_title("Exact solution")
-    fig.colorbar(im1, ax=axes[0], shrink=0.9)
-
-    im2 = axes[1].imshow((u - u_exact).reshape(grid, grid), cmap="coolwarm")
-    axes[1].set_title("Error: AOSM - exact")
-    fig.colorbar(im2, ax=axes[1], shrink=0.9)
-
-    plt.tight_layout()
-    plt.show()
+    err = calcError(uBlock, uTrace, vBlock, vTrace, N)
 
 if __name__ == "__main__":
     main()
