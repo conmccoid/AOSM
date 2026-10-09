@@ -104,6 +104,7 @@ class AOSM:
             dii = di[:n]
             dit = di[n:] # difference on trace
             a = self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
+            print(f"Process {rank}: Iteration {len(Wit)}, norm of difference: {a}", flush=True)
 
         uBlock = ui[:n]
         uTrace = ui[n:]
@@ -135,7 +136,7 @@ class AOSM:
         self.updateT() # update the T matrix for this block
         N_total = comm.allreduce(N_it, op=MPI.SUM) # sum number of iterations from all processes
         if rank==0:
-            print(f"Total number of iterations to adapt TCs: {N_total}")
+            print(f"Total number of iterations to adapt TCs: {N_total}", flush=True)
         comm.Barrier() # synchronize processes
 
         # gather all T matrices from all processes
@@ -162,7 +163,7 @@ class AOSM:
             rtr = self.formResidual(uBlock, uTrace) # update residual
             counter+=1 # increment counter
             if rank==0:
-                print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}")
+                print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}", flush=True)
 
         # generate the final trace solution by averaging across processes
         comm.Allreduce(MPI.IN_PLACE, uTrace, op=MPI.SUM) # gather the averaged trace solution across processes
