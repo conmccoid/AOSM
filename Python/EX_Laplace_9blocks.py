@@ -12,7 +12,7 @@ def main():
     N = n ** 2
 
     # numerical parameters
-    tol = 1e-8
+    tol = 1e-16
 
     # domain
     block, trace, topRight, bottomLeft, rhsBlock, rhsTrace, uBlock, uTrace, indices, trace_indices = Laplace(N)

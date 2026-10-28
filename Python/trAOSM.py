@@ -2,6 +2,7 @@
 # We assume that input is the blocks of the larger matrix, with the trace already identified.
 
 import numpy as np
+from scipy.linalg import lu_factor, lu_solve
 
 # for an eventual sparse version
 from scipy.sparse.linalg import spsolve
@@ -31,6 +32,8 @@ class AOSM:
         self.wBlock = []
         self.wTrace = []
         self.V = []
+        self.zBlock = []
+        self.zTrace = []
 
     def formT(self):
         T = self.T0.copy()
@@ -42,12 +45,10 @@ class AOSM:
     def updateT(self):
         self.T = self.formT()
         # nb: produces subpar results
-    
-    def solveBlock(self, T, rhs):
-        # lin. solve of a specific block
-        # can also be made nonlin?
+
+    def factorBlock(self, T):
         matrix = np.block([[self.block, self.topRight],[self.bottomLeft, self.trace + T]])
-        return np.linalg.solve(matrix, rhs)
+        return lu_factor(matrix)
 
     def MGS(self, Wit, Wii, Vi, dit, dii, Ati):
         # Modified Gram-Schmidt orthogonalization (one step)
@@ -81,13 +82,17 @@ class AOSM:
         Wit = self.wTrace
         Wii = self.wBlock
         Vi = self.V
+        Zii = self.zBlock
+        Zit = self.zTrace
         n = self.sizeBlock
 
         # initial guesses
-        uit = ftri
+        # uit = ftri
+        uit = np.random.rand(self.sizeTrace) # random initial guess for the trace
         uii = -np.linalg.solve(Aii, np.dot(Ait, uit))
         f = np.concatenate((fi, ftri - np.dot(Ati, uii) + np.dot(self.T0, uit)))
-        ui = self.solveBlock(self.formT(), f)
+        lu = self.factorBlock(self.T0)
+        ui = lu_solve(lu, f) # initial solution for the block
 
         # initial difference vectors
         dii = ui[:n] - uii
@@ -99,23 +104,22 @@ class AOSM:
 
         # main loop for MGS orthogonalization
         while a > tol and len(Wit) < maxit:
-            di = self.solveBlock(self.formT(), np.concatenate((np.zeros(n), a*Vi[-1]))) # nb: need to replace formT for accurate and fast computation
-            ui += di # update solution
+            zi = lu_solve(lu, np.concatenate((np.zeros(n), Vi[-1]))) # solve main block
+            Zii.append(zi[:n])
+            Zit.append(zi[n:])
+            k = len(Wit)
+            Zt = np.column_stack(Zit)
+            Z = np.vstack((np.column_stack(Zii), Zt))
+            di = Z @ np.linalg.solve(np.eye(k) - np.column_stack(Wit).T @ Zt, np.eye(k)[:,-1]) # Woodbury update
+            ui += a*di # update solution
             dii = di[:n]
             dit = di[n:] # difference on trace
-            a = self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
+            a = a * self.MGS(Wit, Wii, Vi, dit, dii, Ati) # MGS orthogonalization
             print(f"Process {rank}: Iteration {len(Wit)}, norm of difference: {a}", flush=True)
 
         uBlock = ui[:n]
         uTrace = ui[n:]
         return uBlock, uTrace, len(Wit), a # return updated solution for the subdomain
-
-    def constructS(self, blockIndex):
-        for i in range(self.nBlocks):
-            if i != blockIndex:
-                self.S[blockIndex] += self.T[i]
-    # nb: no longer necessary?
-    # MPI: if it is necessary, needs complete overhaul
 
     def formResidual(self, uBlock, uTrace):
         rtrTotal = -np.matmul(self.bottomLeft, uBlock)
@@ -143,7 +147,8 @@ class AOSM:
         T = np.zeros((self.sizeTrace, self.sizeTrace)) # initialize T matrix for summation
         comm.Allreduce(self.T, T, op=MPI.SUM) # gather T matrices from all processes
         self.S = T - self.T # update S matrices for each block
-
+        lu = self.factorBlock(self.S)
+        
         rtr = self.formResidual(uBlock, uTrace)
 
         # main loop
@@ -156,7 +161,7 @@ class AOSM:
             rhsTraceTotal += self.rhsTrace
             rhsTrace = rhsTraceTotal - (np.matmul(self.T, uTrace) - np.matmul(self.bottomLeft, uBlock))
 
-            u = self.solveBlock(self.S, np.concatenate((self.rhsBlock, rhsTrace))) # solve the global system
+            u = lu_solve(lu, np.concatenate((self.rhsBlock, rhsTrace))) # solve the global system
             uBlock = u[:self.sizeBlock] # store new solutions
             uTrace = u[self.sizeBlock:]
 
