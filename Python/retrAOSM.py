@@ -143,7 +143,14 @@ class AOSM:
 
     def formResidual(self, uBlock, uTrace):
         # nb: self.trace portion should also include all columns which have non-zero value for traceRows
-        rtr = self.rhsTrace[self.traceRows] - np.matmul(self.bottomLeft, uBlock) - np.matmul(self.trace, uTrace)
+        rtr = -np.matmul(self.trace,uTrace)
+        send = [None]*size
+        for j, (ri, ci) in self.nbr.items():
+            send[j] = rtr[ri]
+        recv = comm.alltoall(send)
+        for j, (ri, ci) in self.nbr.items():
+            rtr[ri] += recv[j]
+        rtr += self.rhsTrace[self.traceRows] - np.matmul(self.bottomLeft, uBlock)
         return rtr
 
     def main(self,tol,maxit):
@@ -186,6 +193,7 @@ class AOSM:
             rhsTrace = np.zeros(uTrace.shape)
             for j, (ri, ci) in self.nbr.items():
                 rhsTrace[ri] += recv[j]
+            rhsTrace += self.rhsTrace[self.traceRows]
 
             u = lu_solve(lu, np.concatenate((self.rhsBlock, rhsTrace))) # solve the global system
             uBlock = u[:self.sizeBlock] # store new solutions
@@ -197,6 +205,7 @@ class AOSM:
                 print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}", flush=True)
 
         # average uTrace over all neighbouring processes
+        comm.Barrier()
         send=[None]*size
         for j, (ri, ci) in self.nbr.items():
             send[j] = uTrace[ci]
