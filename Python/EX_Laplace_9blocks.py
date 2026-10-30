@@ -3,7 +3,7 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import spsolve
 import matplotlib.pyplot as plt
 
-from trAOSM import AOSM
+from retrAOSM import AOSM
 from MAT_SymLaplace import SymLaplace
 from DOM_Laplace import Laplace, calcError
 

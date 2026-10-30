@@ -143,15 +143,50 @@ class AOSM:
 
     def formResidual(self, uBlock, uTrace):
         # nb: self.trace portion should also include all columns which have non-zero value for traceRows
-        rtr = -np.matmul(self.trace,uTrace)
-        send = [None]*size
+        # rtr = -np.matmul(self.trace,uTrace)
+        # send = [None]*size
+        # for j, (ri, ci) in self.nbr.items():
+        #     send[j] = rtr[ri]
+        # recv = comm.alltoall(send)
+        # for j, (ri, ci) in self.nbr.items():
+        #     rtr[ri] += recv[j]
+        # rtr += self.rhsTrace[self.traceRows] - np.matmul(self.bottomLeft, uBlock)
+
+        # residual needs to be global so that subprocesses don't stop until everyone is done
+        # otherwise, collectives like comm.alltoall() will hang
+        uTraceGlobal = np.zeros((self.sizeTrace,))
+        uTraceGlobal[self.traceRows] = uTrace/self.multiplicity
+        resTrace = self.traceGlobal @ uTraceGlobal
+        resTrace[self.traceRows] += self.bottomLeft @ uBlock
+        comm.Allreduce(MPI.IN_PLACE, resTrace, op=MPI.SUM)
+        resTrace -= self.rhsTrace
+
+        resBlock = self.block @ uBlock + self.topRight @ uTrace - self.rhsBlock
+        res = np.linalg.norm(resBlock)**2
+        comm.allreduce(res, op=MPI.SUM) # copilot thinks this discards res?
+        res += np.linalg.norm(resTrace)**2
+        return np.sqrt(res)
+
+    def sumNeighbours(self, obj, type='row'):
+        # sum an object over all neighbouring ranks
+        send = [None]*size # initialize data to send to other ranks
+        for j, (ri, ci) in self.nbr.items(): # for each neighbouring rank
+            if type=='mat':
+                send[j] = obj[np.ix_(ri,ci)] # send those parts of obj that are shared
+            elif type=='row':
+                send[j] = obj[ri]
+            elif type=='col':
+                send[j] = obj[ci]
+        recv = comm.alltoall(send) # send data to appropriate ranks
+        out = np.zeros(obj.shape) # initialize object to output results
         for j, (ri, ci) in self.nbr.items():
-            send[j] = rtr[ri]
-        recv = comm.alltoall(send)
-        for j, (ri, ci) in self.nbr.items():
-            rtr[ri] += recv[j]
-        rtr += self.rhsTrace[self.traceRows] - np.matmul(self.bottomLeft, uBlock)
-        return rtr
+            if type=='mat':
+                out[np.ix_(ri,ci)] += recv[j] # sum up all values from neighbours
+            elif type=='row':
+                out[ri] += recv[j]
+            elif type=='col':
+                out[ci] += recv[j]
+        return out
 
     def main(self,tol,maxit):
         # initial guess
@@ -168,51 +203,56 @@ class AOSM:
         comm.Barrier() # synchronize processes
 
         # gather all T matrices from all processes
-        send = [None]*size # initialize data to send to other ranks
-        for j, (ri, ci) in self.nbr.items(): # for each neighbouring rank
-            send[j] = self.T[np.ix_(ri,ci)] # store those parts of self.T that are shared with neighbours
-        recv = comm.alltoall(send) # send data to appropriate ranks?
-        S = np.zeros(self.T.shape) # initialize S matrix for summation
-        for j, (ri, ci) in self.nbr.items():
-            S[np.ix_(ri, ci)] += recv[j] # sum up all self.T values from neighbours
+        S = self.sumNeighbours(self.T, 'mat')
         lu = self.factorBlock(S)
 
-        rtr = self.formResidual(uBlock, uTrace)
+        self.multiplicity = 1 + self.sumNeighbours(np.ones(self.traceCols.size),'col')
+        traceCols = self.traceGlobal[:,self.traceCols]
+
+        res = self.formResidual(uBlock, uTrace)
 
         # main loop
         counter=0
-        while np.linalg.norm(rtr) > 1e-8: # while residual is large
+        while res > 1e-8: # while residual is large
             # nb: TRACE IS NO LONGER RESTRICTED IN GLOBAL SOLVE (needs fixing)
 
             # build right hand side
-            rhsTraceLocal = np.matmul(self.T, uTrace) - np.matmul(self.bottomLeft, uBlock)
+            # off diagonal portions of Att
             send = [None]*size
-            for j, (ri, ci) in self.nbr.items():
-                send[j] = rhsTraceLocal[ri]
+            uTraceLocal = uTrace / self.multiplicity # weighted average for prolongation (important when multiplying by Att)
+            for j, (ri,ci) in self.nbr.items():
+                uTraceGlobal = uTraceLocal.copy()
+                uTraceGlobal[ci] = 0 # remove any part associated with i-th trace (I - Ri'Ri)
+                send[j] = traceCols @ uTraceGlobal # multiply all rows of Att by neighbouring uTrace
+            recv = comm.alltoall(send) # receive neighbouring uTrace contributions
+            rhsOffDiagonal = np.zeros(uTrace.shape)
+            for j in self.nbr:
+                rhsOffDiagonal += recv[j][self.traceRows] # sum up all neighbouring uTrace contributions
+
+            # local transmission conditions
+            # temp = self.bottomLeft @ uBlock
+            send = [None]*size
+            for j, (ri,ci) in self.nbr.items():
+                send[j] = self.T[np.ix_(ri,ci)] @ uTrace[ci] - self.bottomLeft[ri,:] @ uBlock
             recv = comm.alltoall(send)
             rhsTrace = np.zeros(uTrace.shape)
-            for j, (ri, ci) in self.nbr.items():
+            for j, (ri,ci) in self.nbr.items():
                 rhsTrace[ri] += recv[j]
             rhsTrace += self.rhsTrace[self.traceRows]
+            rhsTrace -= rhsOffDiagonal
 
-            u = lu_solve(lu, np.concatenate((self.rhsBlock, rhsTrace))) # solve the global system
+            u = lu_solve(lu, np.concatenate((self.rhsBlock, rhsTrace))) # solve the (restricted) global system
             uBlock = u[:self.sizeBlock] # store new solutions
             uTrace = u[self.sizeBlock:] # store new solutions on trace
 
-            rtr = self.formResidual(uBlock, uTrace) # update residual
+            res = self.formResidual(uBlock, uTrace) # update residual
             counter+=1 # increment counter
             if rank==0:
-                print(f"Iteration: {counter}, Residual: {np.linalg.norm(rtr)}", flush=True)
+                print(f"Iteration: {counter}, Residual: {res}", flush=True)
 
         # average uTrace over all neighbouring processes
         comm.Barrier()
-        send=[None]*size
-        for j, (ri, ci) in self.nbr.items():
-            send[j] = uTrace[ci]
-        recv = comm.alltoall(send)
-        counter = np.ones(uTrace.shape)
-        for j, (ri, ci) in self.nbr.items():
-            uTrace[ci] += recv[j]
-            counter[ci] += 1
-        uTrace /= counter
-        return uBlock, uTrace
+        uTraceGlobal = np.zeros(self.sizeTrace)
+        uTraceGlobal[self.traceCols] = uTrace / self.multiplicity
+        comm.Allreduce(MPI.IN_PLACE, uTraceGlobal, op=MPI.SUM)
+        return uBlock, uTraceGlobal
